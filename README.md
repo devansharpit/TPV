@@ -1,5 +1,5 @@
 # TPV
-Official repository for the paper "TPV: Parameter Perturbations Through the Lens of Test Prediction Variance"
+Official repository for the paper "[TPV: Parameter Perturbations Through the Lens of Test Prediction Variance](https://arxiv.org/pdf/2512.11089)"
 
 # Files and Commands:
 
