@@ -38,6 +38,8 @@ python tpv_label_noise_imagenet.py
 
 ## Fig 9, 10, 15 & 16 (Pruning Experiments)
 
+Note that the code for pruning experiments have been adapted from the official repository of ("Optimal Brain Connection: Towards Efficient Structural Pruning")[https://github.com/ShaowuChen/Optimal_Brain_Connection].
+
 python benchmark_pruning.py --model resnet56_cifar10 \
     --repeats 5 --N_batchs 50 --global_pruning  --pruning_ratio 0.9 \
     --iterative_steps 18 \
