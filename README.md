@@ -9,34 +9,34 @@ python tpv_trace_synth_universal_scatter.py
 ## Fig 3 (TPV stability on CIFAR-10-- vary network width)
 python tpv_cifar_universal_scatter_vary_w.py --dataset c10 --savefile tpv_cifar10_width_sweep
 
-## Fig 11 (TPV stability on CIFAR-100-- vary network width)
+## Fig 9 (TPV stability on CIFAR-100-- vary network width)
 python tpv_cifar_universal_scatter_vary_w.py --dataset c100 --savefile tpv_cifar100_width_sweep
 
-## Fig 4 (TPV stability on CIFAR-10-- vary number of training samples)
+## Fig 8 (TPV stability on CIFAR-10-- vary number of training samples)
 python tpv_cifar_universal_scatter_vary_n_train.py --dataset c10 --savefile tpv_cifar10_vary_n_train_results
 
-## Fig 12 (TPV stability on CIFAR-100-- vary number of training samples)
+## Fig 10 (TPV stability on CIFAR-100-- vary number of training samples)
 python tpv_cifar_universal_scatter_vary_n_train.py --dataset c100 --savefile tpv_cifar100_vary_n_train_results
 
 
-## Fig 5 & 7 & 14 (Synthetic data Label Noise Experiment)
+## Fig 4 & 6 & 12 (Synthetic data Label Noise Experiment)
 python tpv_label_noise.py
 
-## Fig 8 (Cifar-100 Label Noise Experiment)
+## Fig 7 (Cifar-100 Label Noise Experiment)
 python tpv_label_noise_cifar.py --dataset cifar100
 
-## Fig 13 (Cifar-10 Label Noise Experiment)
+## Fig 11 (Cifar-10 Label Noise Experiment)
 python tpv_label_noise_cifar.py --dataset cifar10
 
 ## Note for ImageNet Experiments
 For all ImageNet experiments, please update the function `create_imagenet_dataloaders` in `imagenet_dataloader.py`
 
-## Fig 6 (ImageNet Label Noise Experiment)
+## Fig 5 (ImageNet Label Noise Experiment)
 
 python tpv_label_noise_imagenet.py
 
 
-## Fig 9, 10, 15 & 16 (Pruning Experiments)
+## Fig 13, 14, 15 & 16 (Pruning Experiments)
 
 Note that the code for pruning experiments have been adapted from the official repository of ("Optimal Brain Connection: Towards Efficient Structural Pruning")[https://github.com/ShaowuChen/Optimal_Brain_Connection].
 
