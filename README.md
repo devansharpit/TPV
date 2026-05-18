@@ -37,6 +37,7 @@ TPV/
 │   └── utils/                # Datasets, metrics, and evaluation utilities
 ├── investigation/            # Section 5 — Empirical Verification experiments
 ├── applications/             # Section 6 — Applications experiments
+├── example_tpv_resnet.py     # Quick-Start Example for TPV usage
 ├── imagenet_dataloader.py    # ImageNet data-loading utility (shared)
 ├── presets.py                # Training presets (shared)
 ├── registry.py               # Model registry (shared)
