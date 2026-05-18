@@ -21,7 +21,7 @@ separates the geometry of the trained model (*H_eff*, the second moment of the o
 ## Installation
 
 ```bash
-git clone https://github.com/<your-username>/TPV.git
+git clone https://github.com/devansharpit/TPV.git
 cd TPV
 pip install -r requirements.txt
 ```
