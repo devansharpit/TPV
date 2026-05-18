@@ -25,7 +25,9 @@ The plotting function makes a *unified* scatter plot where:
     marker: number of training samples (n_train = 10 vs 1000)
 """
 
+import sys
 import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pickle as pkl
 from itertools import product
 
@@ -64,11 +66,10 @@ DATASET_TYPES = [
     "multi_relu_teacher",       # X ~ N(0, I), y = sum_k ReLU(a_k^T x + b_k)
     "linear_gaussian",          # X ~ N(0, I), y = x^T w_true
     "relu_teacher",             # X ~ N(0, I), y = ReLU(a^T x)
-    # "two_gaussian_mixture",     # mixture of two Gaussians + linear teacher
 ]
 
 # Label-noise TPV sweeps
-LABEL_SIGMA_LIST = [0.005, 0.01] # [0.05, 0.1]  # std of additive label noise
+LABEL_SIGMA_LIST = [0.005, 0.01]  # std of additive label noise
 LABEL_TPV_RUNS = 20             # Monte Carlo runs per (config, sigma)
 
 # SGD-noise TPV sweeps
@@ -80,11 +81,9 @@ SGD_SNAPSHOT_EVERY = 20         # take a TPV sample every K steps after burn-in
 
 # Training hyperparameters for clean model and label-noise runs
 CLEAN_EPOCHS = 800
-# CLEAN_LR = 5e-3
 CLEAN_LR = 2e-3
 
 LABEL_NOISE_EPOCHS = 200
-# LABEL_NOISE_LR = 5e-3
 LABEL_NOISE_LR = 2e-3
 
 # How strongly to penalize deviation from the clean reference parameters w*
@@ -223,7 +222,6 @@ def train_full_batch(model,
                      center_params=None,
                      center_lambda=0.0,
                      verbose=False):
-    # model.train()
     model.eval()
     optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=wd)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_epochs)
@@ -255,7 +253,6 @@ def train_full_batch(model,
         optimizer.step()
         scheduler.step()
 
-    # if verbose:
     print(f"  Final training loss: {loss.item():.6f}")
     if loss>initial_loss:
         print("Warning: Training loss increased during training.")
@@ -621,7 +618,6 @@ def estimate_tpv_sgd_noise(input_dim,
             L_train_per_snap.append(mse_train_inst)
             L_test_per_snap.append(mse_test_inst)
 
-            # model.train()
             model.eval()
 
     if snapshot_count == 0:
@@ -1104,8 +1100,6 @@ def plot_unified_tpv_scatter(results_path,
             )
         plt.title(f"width={np.unique(width_all)[0]}")
     else:
-        # for n_train in sorted(np.unique(ntrain_all)):
-        #     mask = (ntrain_all == n_train)
         for width in sorted(np.unique(width_all)):
             mask = (width_all == width)
 
@@ -1168,7 +1162,6 @@ def plot_unified_tpv_scatter(results_path,
     fontsize=15
     plt.xlabel("TPV_train", fontsize=fontsize)
     plt.ylabel("TPV_test", fontsize=fontsize)
-    # plt.title("TPV Trace Stability Scatter")
 
     cb = plt.colorbar()
     cb.set_label("Generalization gap  (L_test - L_train)")

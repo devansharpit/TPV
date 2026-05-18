@@ -1,3 +1,6 @@
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import math
 import numpy as np
 import pickle as pkl
@@ -90,14 +93,13 @@ def train_full_batch_mse(
 
     If batch_size is None, uses full-batch (implemented via gradient
     accumulation over a fixed accumulation batch size).
-    
+
     ref_state_dict: If provided, adds proximity penalty: proximity_lambda * ||w - w_ref||^2
     proximity_lambda: Weight of the proximity penalty term.
     dataloader_seed: If provided, uses a fixed seed for DataLoader shuffling (deterministic across runs).
-    
+
     Returns: (final_loss, epochs_trained)
     """
-    # model.train()
     model.eval()
     if opt == "adamw":
         optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=wd)
@@ -117,12 +119,12 @@ def train_full_batch_mse(
             loader_gen.manual_seed(dataloader_seed)
         else:
             loader_gen = None
-        
+
         dataset = torch.utils.data.TensorDataset(X, Y_targets)
         dataloader = torch.utils.data.DataLoader(
-            dataset, 
-            batch_size=batch_size, 
-            shuffle=False,#True,
+            dataset,
+            batch_size=batch_size,
+            shuffle=False,
             generator=loader_gen,
         )
     else:
@@ -183,7 +185,7 @@ def train_full_batch_mse(
             logits = model(X)
             current_loss = criterion(logits, Y_targets).item()
         model.eval()
-        
+
         # Append current loss to list
         total_loss_list.append(current_loss)
         pbar.set_postfix({"MSE": f"{current_loss}"})
@@ -273,7 +275,7 @@ def estimate_empirical_TPV_logit_noise(
 
     We define vector-output TPV as:
         TPV = E_{runs,x}[ || z_hat(x) - z_star(x) ||_2^2 ].
-    
+
     IMPORTANT: We make SGD / DataLoader behavior deterministic across runs
     and let ONLY label noise differ between runs. This is done via:
         - global seeding at the top of the file (torch / np / random)
@@ -296,7 +298,7 @@ def estimate_empirical_TPV_logit_noise(
     # Dedicated seed for DataLoader shuffling; we will use this
     # SAME seed each run so minibatch order is identical.
     LOADER_SEED = 12345
-    
+
     total_loss_lol = []
 
     for r in range(R):
@@ -377,8 +379,10 @@ def estimate_empirical_TPV_logit_noise(
     sqnorm_train = np.sum(diffs_train ** 2, axis=-1)  # (R, n_train)
     sqnorm_test = np.sum(diffs_test ** 2, axis=-1)    # (R, n_test)
 
-    empirical_TPV_train = np.mean(sqnorm_train)
-    empirical_TPV_test = np.mean(sqnorm_test)
+    num_params = sum(p.numel() for p in base_state_dict.values())
+
+    empirical_TPV_train = np.mean(sqnorm_train)/num_params
+    empirical_TPV_test = np.mean(sqnorm_test)/num_params
 
     # Aggregate losses
     mse_train_noisy_targets_mean = np.mean(mse_train_noisy_targets_list)
@@ -417,7 +421,7 @@ def estimate_empirical_TPV_logit_noise(
 # CIFAR data (small subsets)
 # ----------------------------
 args = get_args()
-dataset =  args.dataset  #["cifar10", "cifar100"][0]  # "cifar10" or "cifar100"
+dataset =  args.dataset
 np.random.seed(0)
 n_train_sub = 4000
 n_test_sub = 4000
@@ -433,11 +437,11 @@ transform = transforms.Compose([
 if dataset=="cifar10":
     num_classes = 10
     data_cls = torchvision.datasets.CIFAR10
-    train_mse_thres = [0] #[0.003, 0.01]  # training stops when MSE goes below this threshold
+    train_mse_thres = [0]  # training stops when MSE goes below this threshold
 else:
     num_classes = 100
     data_cls = torchvision.datasets.CIFAR100
-    train_mse_thres = [0] # [0.03, 0.1]  # training stops when MSE goes below this threshold
+    train_mse_thres = [0]  # training stops when MSE goes below this threshold
 train_dataset = data_cls(
     root="./data",
     train=True,
@@ -493,17 +497,17 @@ model_name_list = [
 ]
 
 # Standard deviations of Gaussian noise on logits (teacher outputs)
-noise_std_list = [0.1, ] 
+noise_std_list = [0.1, ]
 R = 20                  # Monte Carlo runs per (model, noise_std)
-max_epochs_noisy = 10  # maximum epochs 
+max_epochs_noisy = 10  # maximum epochs
 
 lr_noisy = 1e-4
-batch_size = 256 # Full-batch training using gradient accumulation if None
+batch_size = 256  # Full-batch training using gradient accumulation if None
 momentum = 0.9
 wd=0.0
 opt = "sgd"
-proximity_lambda = 0 # 0.001  # weight for proximity penalty ||w - w_ref||^2 (0 = no penalty)
-fname = f"results/tpv_logit_noise_{dataset}.pkl" # target noise is the only source of randomness
+proximity_lambda = 0  # weight for proximity penalty ||w - w_ref||^2 (0 = no penalty)
+fname = f"results/tpv_logit_noise_{dataset}.pkl"  # target noise is the only source of randomness
 
 
 
@@ -665,21 +669,12 @@ print("\nEmpirical TPV (Test):\n", empirical_TPV_test)
 print("\nEmpirical TPV (Train):\n", empirical_TPV_train)
 
 
-
-
-
-
-
-
-
-
-
 ####################################
 # Plotting
 ####################################
 
 results_path = 'results'
-dataset = args.dataset # 'cifar10'
+dataset = args.dataset
 
 # ----------------------------
 # Reload and plotting

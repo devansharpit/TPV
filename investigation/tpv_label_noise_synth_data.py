@@ -1,3 +1,6 @@
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import math
 import numpy as np
 import torch
@@ -5,7 +8,6 @@ import torch.nn as nn
 import torch.optim as optim
 import matplotlib.pyplot as plt
 import pickle as pkl
-import os
 
 # ----------------------------
 # Configs/Hyperparams
@@ -24,7 +26,7 @@ max_epochs_noisy = 500  # maximum epochs for noisy training (safety limit)
 train_loss_thres = [0,0]  # training stops when loss goes below this threshold
 lr_clean = 5e-3
 lr_noisy = 5e-3
-CENTER_PENALTY_LAMBDA = 0 # 1e-3  # strength of quadratic penalty around w*
+CENTER_PENALTY_LAMBDA = 0  # strength of quadratic penalty around w*
 compute_theoretical_TPV = True  # whether to compute theoretical TPV
 
 save_dir = 'results'
@@ -107,7 +109,6 @@ def train_full_batch(model,
     """
     model.eval()
     optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=wd)
-    # scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max_epochs)
     criterion = nn.MSELoss()
 
     epochs_trained = 0
@@ -130,14 +131,12 @@ def train_full_batch(model,
         # Mild gradient clipping to avoid explosions
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=10.0)
         optimizer.step()
-        # scheduler.step()
 
         # Check training loss (MSE only, without penalty) after each epoch
         model.eval()
         with torch.no_grad():
             train_preds = model(X)
             current_train_loss = criterion(train_preds, y).item()
-        # model.train()
 
         # Stop if training loss is below threshold
         if current_train_loss < train_loss_thres:
@@ -335,7 +334,6 @@ def estimate_empirical_TPV(width, sigma, R, X_train, y_clean_train,
         base_model = MLP(d, width, depth=depth).to(device)
         base_model.load_state_dict(init_state)
         base_model.eval()
-        # f_star_ref = base_model(X_ref).detach()
     ref_state_dict = init_state
 
     for r in range(R):
@@ -530,7 +528,7 @@ print("\nTest Loss Std:\n", test_loss_std)
 print("\nReference Model Test Loss (Clean):\n", test_loss_ref_model)
 
 import pickle as pkl
-with open(f"{save_file_name}.pkl", "wb") as f: # 6 is final version; 7 turned off lr scheduler
+with open(f"{save_file_name}.pkl", "wb") as f:
     pkl.dump({
         "width_list": width_list,
         "sigma_list": sigma_list,
@@ -618,9 +616,6 @@ if T_base is not None:
     legend.get_frame().set_alpha(0)
     plt.savefig(f'{save_dir}/plots/T_base_vs_width.pdf', bbox_inches='tight')
 
-
-# sigma_idx_for_width = sigma_idx_for_loss = 0  # index for sigma_list
-# sigma_val = sigma_list[sigma_idx_for_width]
 
 for sigma_idx_for_width in [0,1]:
     sigma_idx_for_loss = sigma_idx_for_width

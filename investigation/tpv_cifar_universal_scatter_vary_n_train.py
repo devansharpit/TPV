@@ -1,3 +1,6 @@
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 """
 TPV CIFAR experiment varying the number of training samples (n_train),
 with:
@@ -66,7 +69,7 @@ def compute_proximity_penalty(model, ref_state_dict):
         if name in ref_state_dict:
             ref_param = ref_state_dict[name]
             penalty = penalty + torch.sum((param - ref_param) ** 2)
-    return penalty # num_params
+    return penalty
 
 # -------------------------------------------------------------
 # Dataset wrapper for noisy logit targets (label-noise TPV)
@@ -475,7 +478,7 @@ def train_model_with_sgd_noise(
 
 
 def main(args):
-    
+
 
     # Reproducibility
     SEED = 0
@@ -490,17 +493,17 @@ def main(args):
     N_TRAIN_CHOICES = [1, 10, 10000]
 
     # Label-noise TPV config (Gaussian logit noise)
-    LOGIT_NOISE_STD_LIST = [0.1]  
+    LOGIT_NOISE_STD_LIST = [0.1]
     R_LABEL = 5                     # runs per (arch, noise_std, n_train)
     N_EPOCHS_NOISY_LABEL = 10
     LR_NOISY_LABEL = 1e-4
     WEIGHT_DECAY_LABEL = 0.0
     MOMENTUM_LABEL = 0.9
     BATCH_SIZE_LABEL = 256
-    PROX_LAMBDA_LABEL = 0# 1e-2       # mean-normalized proximity penalty
+    PROX_LAMBDA_LABEL = 0       # mean-normalized proximity penalty
 
     # SGD-noise config (clean labels, stochastic mini-batches)
-    SGD_LR_LIST = [1e-4, 5e-5] 
+    SGD_LR_LIST = [1e-4, 5e-5]
     SGD_BATCH_SIZE_LIST = [128, 256]
     N_EPOCHS_SGD_NOISY = 10
     WEIGHT_DECAY_SGD = 0.0
@@ -932,28 +935,27 @@ def plot_unified_tpv_scatter(results_path: str,
     # ----- 10% error band -----
     eb = 0.5
     factor = 1.0 + eb
-    
+
     # Safety margin so line extends slightly beyond data
-    # print(min_val, max_val)
     margin = 0.05  # 5% in log space
     log_min = np.log10(min_val)
     log_max = np.log10(max_val)
     log_span = log_max - log_min
     log_min -= margin * log_span
     log_max += margin * log_span
-    
+
     # 2) Use logspace on a strictly positive range
     x_line = np.logspace(log_min, log_max, 400)
-    
+
     lower = x_line / factor      # y = x / (1 + eb)
     upper = x_line * factor      # y = x * (1 + eb)
 
     plt.fill_between(
         x_line, lower, upper,
-        color="gray", alpha=0.2,# label="10% band"
+        color="gray", alpha=0.2,
     )
 
-    
+
     ax.plot(
         [min_val_, max_val_],
         [min_val_, max_val_],
@@ -978,7 +980,6 @@ def plot_unified_tpv_scatter(results_path: str,
         cbar.ax.tick_params(labelsize=9)
 
     ax.legend(
-        # title="# training samples",
         fontsize=9,
         title_fontsize=10,
         loc="upper left",
@@ -988,7 +989,7 @@ def plot_unified_tpv_scatter(results_path: str,
     fig.tight_layout()
     os.makedirs(f'{results_path}/plots', exist_ok=True)
     plt.savefig(f'{results_path}/plots/tpv_{args.dataset}_universal_scatter_vary_n_train.pdf', bbox_inches='tight')
-    
+
     plt.show()
 
 if __name__ == "__main__":
@@ -996,6 +997,6 @@ if __name__ == "__main__":
     main(args)
 
     results_path = 'results'
-    exp_name = args.savefile 
+    exp_name = args.savefile
 
     plot_unified_tpv_scatter(results_path, args, space='logits', n_train_exc=[], exp_name=exp_name)

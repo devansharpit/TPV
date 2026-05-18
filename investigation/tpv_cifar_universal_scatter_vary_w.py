@@ -1,12 +1,14 @@
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 """
-TPV CIFAR width sweep experiment with label-noise (logit Gaussian) and SGD-noise.
-Rewritten to:
+TPV CIFAR width sweep experiment with label-noise (logit Gaussian) and SGD-noise:
   - use Gaussian noise on logits + MSE for label-noise TPV
   - ensure only target noise is stochastic in label-noise runs
   - freeze BatchNorm / Dropout (eval mode) during TPV runs
   - avoid stochastic data augmentation in TPV runs
   - optionally add proximity penalty around the reference weights
-  - keep TinyCNN and MobileNetV2 width multipliers as a proxy for varying width.
+  - MobileNetV2 width multipliers as a proxy for varying width.
 
 Example:
   python tpv_cifar_universal_scatter_vary_w.py --dataset c10 --savefile tpv_cifar10_width_sweep
@@ -40,7 +42,7 @@ def compute_proximity_penalty(model, ref_state_dict):
         if name in ref_state_dict:
             ref_param = ref_state_dict[name]
             penalty = penalty + torch.sum((param - ref_param) ** 2)
-    return penalty # num_params
+    return penalty
 
 
 # -------------------------------------------------------------
@@ -236,8 +238,6 @@ def train_model_with_logit_noise(
 
     # Reference params for optional proximity penalty
     ref_state_dict = base_model.state_dict()
-    # ref_params = [p.detach().clone() for p in base_model.parameters()]
-    # num_params = sum(p.numel() for p in ref_params)
 
     criterion = nn.MSELoss(reduction="mean")
     optimizer = optim.SGD(
@@ -271,11 +271,6 @@ def train_model_with_logit_noise(
 
             if prox_lambda > 0.0:
                 prox_penalty = compute_proximity_penalty(model, ref_state_dict)
-                # prox_sum = 0.0
-                # for p, p_ref in zip(model.parameters(), ref_params):
-                #     diff = p - p_ref
-                #     prox_sum += diff.pow(2).sum()
-                # prox_mean = prox_sum / float(num_params)
                 loss = mse + prox_lambda * prox_penalty
             else:
                 loss = mse
@@ -292,7 +287,7 @@ def train_model_with_logit_noise(
     return model
 
 
-        
+
 # -------------------------------------------------------------
 # Training under SGD noise (clean labels, stochastic mini-batches)
 # -------------------------------------------------------------
@@ -334,8 +329,6 @@ def train_model_with_sgd_noise(
 
     # Save reference parameters for proximity penalty
     ref_state_dict = base_model.state_dict()
-    # ref_params = [p.detach().clone() for p in base_model.parameters()]
-    # num_params = sum(p.numel() for p in ref_params)
 
     # SGD noise arises from mini-batch sampling (shuffle=True) on clean data
     loader = DataLoader(
@@ -371,11 +364,6 @@ def train_model_with_sgd_noise(
             mse = criterion(logits, y)
             if prox_lambda > 0.0:
                 prox_penalty = compute_proximity_penalty(model, ref_state_dict)
-                # prox_sum = 0.0
-                # for p, p_ref in zip(model.parameters(), ref_params):
-                #     diff = p - p_ref
-                #     prox_sum += diff.pow(2).sum()
-                # prox_mean = prox_sum / float(num_params)
                 loss = mse + prox_lambda * prox_penalty
             else:
                 loss = mse
@@ -496,7 +484,7 @@ def plot_unified_tpv_scatter(
         "mbv2_x0_75": "D",
         "mbv2_x1_0":  "^",
         "mbv2_x1_4":  "*",
-    
+
         # CIFAR-100
         "mbv2_x0_5_c100":  "s",
         "mbv2_x0_75_c100": "D",
@@ -510,7 +498,7 @@ def plot_unified_tpv_scatter(
             "mbv2_x0_75": 24,  # 0.75 * 32
             "mbv2_x1_0":  32,  # base width
             "mbv2_x1_4":  48,  # 1.4 * 32
-        
+
             # CIFAR-100
             "mbv2_x0_5_c100":  16,
             "mbv2_x0_75_c100": 24,
@@ -562,7 +550,6 @@ def plot_unified_tpv_scatter(
     l = sorted(l, key=lambda x: ARCH_WIDTH_MAP[x])
     for arch in sorted(l):
         mask = (arch_name == arch)
-        # print(len(mask))
         if not np.any(mask):
             continue
 
@@ -589,28 +576,27 @@ def plot_unified_tpv_scatter(
     # ----- 10% error band -----
     eb = 0.5
     factor = 1.0 + eb
-    
+
     # Safety margin so line extends slightly beyond data
-    # print(min_val, max_val)
     margin = 0.05  # 5% in log space
     log_min = np.log10(min_val)
     log_max = np.log10(max_val)
     log_span = log_max - log_min
     log_min -= margin * log_span
     log_max += margin * log_span
-    
+
     # 2) Use logspace on a strictly positive range
     x_line = np.logspace(log_min, log_max, 400)
-    
+
     lower = x_line / factor      # y = x / (1 + eb)
     upper = x_line * factor      # y = x * (1 + eb)
 
     plt.fill_between(
         x_line, lower, upper,
-        color="gray", alpha=0.2,# label="10% band"
+        color="gray", alpha=0.2,
     )
 
-    
+
     ax.plot(
         [min_val_, max_val_],
         [min_val_, max_val_],
@@ -635,7 +621,6 @@ def plot_unified_tpv_scatter(
         cbar.ax.tick_params(labelsize=9)
 
     ax.legend(
-        # title="# training samples",
         fontsize=9,
         title_fontsize=10,
         loc="upper left",
@@ -646,7 +631,7 @@ def plot_unified_tpv_scatter(
 
     os.makedirs(f'{results_path}/plots', exist_ok=True)
     plt.savefig(f'{results_path}/plots/tpv_{args.dataset}_universal_scatter_vary_width.pdf', bbox_inches='tight')
-    
+
     print(f"Saved TPV scatter plot")
 
     plt.show()
@@ -677,7 +662,7 @@ def get_args():
 
 
 def main(args):
-    
+
 
     # Experimental configuration
     N_TRAIN_CHOICES = [10000]
@@ -687,17 +672,17 @@ def main(args):
     N_TEST_TPV = 10000         # number of test examples used for TPV (None = all)
 
     # Label-noise (logit Gaussian) experiment config
-    LOGIT_NOISE_STD_LIST = [0.05, 0.1] 
+    LOGIT_NOISE_STD_LIST = [0.05, 0.1]
     R_LABEL = 5                     # runs per (arch, noise_std, n_train)
     N_EPOCHS_NOISY_LABEL = 10
     LR_NOISY_LABEL = 1e-4
     WEIGHT_DECAY_LABEL = 0.0
     MOMENTUM_LABEL = 0.
-    BATCH_SIZE_LABEL = 256 
-    PROX_LAMBDA_LABEL = 0#1e-3        # proximity penalty on mean squared parameter displacement
+    BATCH_SIZE_LABEL = 256
+    PROX_LAMBDA_LABEL = 0        # proximity penalty on mean squared parameter displacement
 
     # SGD-noise experiment config
-    SGD_LR_LIST = [1e-4, 5e-5] 
+    SGD_LR_LIST = [1e-4, 5e-5]
     SGD_BATCH_SIZE_LIST = [128, 256]
     N_EPOCHS_SGD_NOISY = 10
     WEIGHT_DECAY_SGD = 0.0
@@ -1006,13 +991,13 @@ def main(args):
         pkl.dump(results, f)
     print(f"\nSaved all TPV results to {RESULTS_PATH}")
 
-    
+
 
 if __name__ == "__main__":
     args = get_args()
     main(args)
 
     results_path = 'results'
-    exp_name = args.savefile 
+    exp_name = args.savefile
 
     plot_unified_tpv_scatter(results_path=results_path, space='logits', exp_name=exp_name, args=args)

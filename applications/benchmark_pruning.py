@@ -1,3 +1,6 @@
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 '''
 
 pretrained cifar models: https://github.com/chenyaofo/pytorch-cifar-models
@@ -31,7 +34,6 @@ python benchmark_pruning.py --model mobilenet_v2_imagenet \
 import copy
 import gc
 import logging
-import sys, os
 import time
 import registry
 
@@ -46,12 +48,11 @@ from torchvision.transforms.functional import InterpolationMode
 
 
 import torch_pruning as tp
-import os
 from tqdm import tqdm
-from Selfmake_Importance import GroupJacobianImportance_accumulate, WHCImportance
-from Selfmake_Importance import GroupJBRImportance_accumulate
+from pruning_utils.Selfmake_Importance import GroupJacobianImportance_accumulate, WHCImportance
+from pruning_utils.Selfmake_Importance import GroupJBRImportance_accumulate
 from imagenet_dataloader import create_imagenet_dataloaders
-from plot_benchmark_results import plot_results
+from pruning_utils.plot_pruning_results import plot_results
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -146,7 +147,7 @@ if __name__ == "__main__":
         num_classes = 1000
     else:
         raise NotImplementedError
-    
+
     ####### load data
     if dataset in ['cifar10', 'cifar100']:
         batch_size = 128
@@ -158,33 +159,31 @@ if __name__ == "__main__":
             [transforms.ToTensor(), transforms.Normalize(mean, std)])
 
         if dataset=='cifar10':
-            train_data = datasets.CIFAR10(data_root, train=True, transform=train_transform, download=False)
-            test_data = datasets.CIFAR10(data_root, train=False, transform=test_transform, download=False)        
+            train_data = datasets.CIFAR10(data_root, train=True, transform=train_transform, download=True)
+            test_data = datasets.CIFAR10(data_root, train=False, transform=test_transform, download=True)
         elif dataset=='cifar100':
-            train_data = datasets.CIFAR100(data_root, train=True, transform=train_transform, download=False)
-            test_data = datasets.CIFAR100(data_root, train=False, transform=test_transform, download=False)         
+            train_data = datasets.CIFAR100(data_root, train=True, transform=train_transform, download=True)
+            test_data = datasets.CIFAR100(data_root, train=False, transform=test_transform, download=True)
         else:
             raise NotImplementedError
 
         train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=16, pin_memory=True, prefetch_factor=8, persistent_workers=True)
-        val_loader = torch.utils.data.DataLoader(test_data, batch_size=500, shuffle=False, num_workers=16, pin_memory=True, prefetch_factor=8, persistent_workers=True)    
+        val_loader = torch.utils.data.DataLoader(test_data, batch_size=500, shuffle=False, num_workers=16, pin_memory=True, prefetch_factor=8, persistent_workers=True)
         example_inputs = torch.randn(1, 3, 32, 32).cuda()
 
     elif dataset=='imagenet':
-        batch_size = 256 
-        # Create data loaders
+        batch_size = 256
         train_loader, val_loader, class_to_idx = create_imagenet_dataloaders(
             train_batch_size=batch_size,
             val_batch_size=32,
         )
         example_inputs = torch.randn(1, 3, 224, 224).cuda()
-        # For JBR: need train_data reference (lazy-loads images, doesn't store in memory)
         train_data = train_loader.dataset
 
     else:
         raise NotImplementedError
 
-        
+
     ###### prepare hyper-parameters
     N_batchs = args.N_batchs if args.N_batchs!=-1 else len(train_loader)
     print('N_batchs for importance estimation:', N_batchs)
@@ -192,18 +191,18 @@ if __name__ == "__main__":
     network = args.model
     normalizer=None if args.normalizer=='None' else args.normalizer
     group_reduction=None  if args.group_reduction=='None' else args.group_reduction
-    
+
     repeats = args.repeats
     pruning_ratio = args.pruning_ratio
     iterative_steps = args.iterative_steps # remove 5% filter each time by default
-    
-    save_dir = f'./results/benchmark_importance/{args.save_dir}'
+
+    save_dir = f'./results/pruning_results/{args.save_dir}'
     if global_pruning:
         save_dir += '_Global'
     else:
-        save_dir += '_Local'        
+        save_dir += '_Local'
     os.makedirs(save_dir, exist_ok=True)
-    
+
     logger = logging.getLogger(save_dir+'/log.log')
     logging.basicConfig(level=logging.INFO,
                         format='%(asctime)s- %(message)s',
@@ -215,35 +214,34 @@ if __name__ == "__main__":
     logger = logging.getLogger()
 
     pretrained=False
-    # example_inputs = torch.randn(1, 3, 32, 32).cuda()
-        
+
     model = registry.get_model(args.model, num_classes=num_classes, pretrained=pretrained, target_dataset=dataset).cuda()
-  
+
     model.eval()
 
     ### Importance criteria
     imp_dict = {
         # data-free
-        'Random': tp.importance.RandomImportance(), 
+        'Random': tp.importance.RandomImportance(),
         'L1': tp.importance.GroupMagnitudeImportance(p=1, group_reduction=group_reduction, normalizer=normalizer),
         'FPGM': tp.importance.FPGMImportance(group_reduction=group_reduction, normalizer=normalizer),
         'BN Scale': tp.importance.BNScaleImportance(group_reduction=group_reduction, normalizer=normalizer),
-        'WHC': WHCImportance(group_reduction=group_reduction, normalizer=normalizer),      
-        
+        'WHC': WHCImportance(group_reduction=group_reduction, normalizer=normalizer),
+
         # data-driven
-        'Taylor': tp.importance.TaylorImportance(group_reduction=group_reduction, normalizer=normalizer), 
+        'Taylor': tp.importance.TaylorImportance(group_reduction=group_reduction, normalizer=normalizer),
         'JBR': GroupJBRImportance_accumulate(group_reduction=group_reduction, normalizer=normalizer),
-        'Jacobian': GroupJacobianImportance_accumulate(group_reduction=group_reduction, normalizer=normalizer), 
+        'Jacobian': GroupJacobianImportance_accumulate(group_reduction=group_reduction, normalizer=normalizer),
         'Hessian': tp.importance.HessianImportance(group_reduction=group_reduction, normalizer=normalizer),
     }
-    
+
     colors = {
         'WHC': 'C0',         # Blue
         'L1': 'C1',          # Orange
         'FPGM': 'C2',        # Green
         'BN Scale': 'C7',    # Gray
         'Random': 'C4',      # Purple
-        
+
         'Taylor': 'C5',      # Brown
         'Hessian': 'C6',     # Pink
         'JBR': 'C10',        # Cyan
@@ -258,7 +256,7 @@ if __name__ == "__main__":
     train_acc_record = {}
     val_loss_record = {}
     val_acc_record = {}
-    
+
     # Resume from existing results if --resume flag is set
     results_path = f'{save_dir}/results.pth'
     if args.resume and os.path.exists(results_path):
@@ -272,53 +270,52 @@ if __name__ == "__main__":
         val_acc_record = existing_data.get('val_acc_record', {})
         time_record = existing_data.get('time_record', {})  # backward compatible
         logger.info(f'Loaded results for: {list(params_record.keys())}')
-    
 
-    
-    
+
+
     # print the number of parameters and MACs of the original model
     base_macs, base_nparams = tp.utils.count_ops_and_params(model, example_inputs)
     logger.info(f"Original Model - MAC(B): {base_macs/1e+9:.2f}, #Params: {base_nparams:.2f}")
 
-    
+
 
     base_train_acc, base_train_loss = 0, 0
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     if args.bnrecal:
         recalibrate_bn(model, train_loader, device, max_batches=50)
-    base_val_acc, base_val_loss = validate_model(model, val_loader) 
+    base_val_acc, base_val_loss = validate_model(model, val_loader)
     logger.info(f"MACs: {base_macs/base_macs:.2f}, MAC(B): {base_macs/1e+9:.2f}, #Params: {base_nparams/base_nparams:.2f}, Train_Acc: {base_train_acc:.4f}, train_Loss: {base_train_loss:.4f}, Val_Acc: {base_val_acc:.4f}, Val_Loss: {base_val_loss:.4f}")
 
-    
+
 
     middle_name = f'Gr{group_reduction}_No{normalizer}_Nbatchs{N_batchs}'
     if global_pruning:
         middle_name += '_Global'
     else:
         middle_name += '_Local'
-    
+
     for imp_name, imp in imp_dict.items():
         # Skip if already completed (resume mode)
         if args.resume and imp_name in params_record and len(params_record[imp_name]) >= repeats:
             logger.info(f'Skipping {imp_name} - already completed in previous run')
             continue
-        
+
         if args.run_criteria=='':
             pass
         else:
             if imp_name not in eval(args.run_criteria):
                 continue
-        
+
         evaluating_time = 0
         overall_start_time = time.time()
         for repeat_ in range(repeats):
-            
-            
+
+
             # determined criteria do not need multiple tests
             if not ('Taylor' in imp_name or 'Hessian' in imp_name or 'Jacobian' in imp_name or 'JBR' in imp_name or 'Random' in imp_name) and (imp_name in params_record and len(params_record[imp_name])>=1):
                 continue
-            
-            
+
+
             if imp_name in val_acc_record:
                 print(f' (already done {len(val_acc_record[imp_name])} repeats)')
                 if len(val_acc_record[imp_name])>=repeats:
@@ -328,47 +325,47 @@ if __name__ == "__main__":
             else:
                 print(f' (not done yet)')
                 repeat = repeat_
-            logger.info('='*50+imp_name+' repeat'+str(repeat)+'='*50 )# +
+            logger.info('='*50+imp_name+' repeat'+str(repeat)+'='*50 )
             if imp_name not in params_record:
                 train_loss_record[imp_name] = [[]]
                 train_acc_record[imp_name] = [[]]
                 val_loss_record[imp_name] = [[]]
-                val_acc_record[imp_name] = [[]]        
+                val_acc_record[imp_name] = [[]]
                 params_record[imp_name] = [[]]
                 macs_record[imp_name] = [[]]
             else:
                 train_loss_record[imp_name].append([])
                 train_acc_record[imp_name].append([])
                 val_loss_record[imp_name].append([])
-                val_acc_record[imp_name].append([])       
+                val_acc_record[imp_name].append([])
                 params_record[imp_name].append([])
                 macs_record[imp_name].append([])
-                
+
             model=None
-            torch.cuda.empty_cache() 
-            
+            torch.cuda.empty_cache()
+
             model = registry.get_model(args.model, num_classes=num_classes, pretrained=pretrained, target_dataset=dataset).cuda()
- 
+
             model.eval()
-            torch.cuda.empty_cache() 
-            
+            torch.cuda.empty_cache()
+
             # Reset importance object's internal state for this repeat
             if hasattr(imp, 'zero_grad'):
                 imp.zero_grad()
             if hasattr(imp, 'zero_score'):
                 imp.zero_score()
-            
+
             if 'resnet' in args.model:
                 ignored_layers = [model.fc]  # DO NOT prune the final classifier!
             else:
                 ignored_layers = [model.classifier]
-            
+
             pruner = tp.pruner.MetaPruner(
                 model,
                 example_inputs,
                 iterative_steps=iterative_steps,
                 importance=imp,
-                pruning_ratio=pruning_ratio, 
+                pruning_ratio=pruning_ratio,
                 ignored_layers=ignored_layers,
                 global_pruning=global_pruning,
             )
@@ -414,21 +411,21 @@ if __name__ == "__main__":
                             break
                         # Free intermediate GPU tensors
                         del imgs_cuda, logits, probs, max_probs, mask
-                
+
                 # Explicitly delete the loader and force cleanup
                 del jbr_loader_init
                 torch.cuda.empty_cache()
                 gc.collect()
-                
+
                 # Concatenate all samples into tensors and create a TensorDataset
                 all_imgs = torch.cat(all_imgs, dim=0)[:batch_size * N_batchs]
                 all_preds = torch.cat(all_preds, dim=0)[:batch_size * N_batchs]
                 jbr_dataset = torch.utils.data.TensorDataset(all_imgs, all_preds)
-                
+
                 # Clear the lists to free memory
                 del all_imgs, all_preds
                 torch.cuda.empty_cache()
-                
+
                 # Create a fresh DataLoader with shuffle=True for true shuffling
                 # This re-batches samples differently at each pruning iteration
                 jbr_loader = torch.utils.data.DataLoader(
@@ -447,12 +444,12 @@ if __name__ == "__main__":
             train_loss_record[imp_name][repeat].append(base_train_loss)
             train_acc_record[imp_name][repeat].append(base_train_acc)
             val_loss_record[imp_name][repeat].append(base_val_loss)
-            val_acc_record[imp_name][repeat].append(base_val_acc)    
+            val_acc_record[imp_name][repeat].append(base_val_acc)
             macs_record[imp_name][repeat].append(base_macs)
 
             for i in range(iterative_steps):
                 model.eval()
-                
+
                 evaluating_start_time = time.time()
                 if isinstance(imp, tp.importance.HessianImportance):
                     imp.zero_grad() # clear accumulated gradients before each pruning step
@@ -460,20 +457,15 @@ if __name__ == "__main__":
                         if k>=N_batchs: break
                         imgs = imgs.cuda()
                         lbls = lbls.cuda()
-                        output = model(imgs) 
+                        output = model(imgs)
                         # compute loss for each sample
                         loss = torch.nn.functional.cross_entropy(output, lbls, reduction='none')
-                        '''
-                        Note, the code from torch_pruning wrongly clear the gradients of the model here
-                        so we remove the following line 
-                        '''
-                        # imp.zero_grad() # clear accumulated gradients
                         for l in loss:
                             model.zero_grad() # clear gradients
                             l.backward(retain_graph=True) # single-sample gradient
-                            imp.accumulate_grad(model) # accumulate g^2  
-                        torch.cuda.empty_cache() # in case CUDA OUT OF MEMORY                    
-                            
+                            imp.accumulate_grad(model) # accumulate g^2
+                        torch.cuda.empty_cache() # in case CUDA OUT OF MEMORY
+
                 elif isinstance(imp, tp.importance.TaylorImportance):
                     model.zero_grad() # clear accumulated gradients before each pruning step
                     for k, (imgs, lbls) in enumerate(train_loader):
@@ -482,9 +474,9 @@ if __name__ == "__main__":
                         lbls = lbls.cuda()
                         output = model(imgs)
                         loss = torch.nn.functional.cross_entropy(output, lbls)
-                        loss.backward() 
+                        loss.backward()
                     torch.cuda.empty_cache()  # in case CUDA OUT OF MEMORY
-                
+
                 elif isinstance(imp, GroupJBRImportance_accumulate):
                     # JBR: accumulate J^T v over N_batchs and then build scores,
                     # using *fixed* pseudo-labels from the unpruned model.
@@ -512,11 +504,11 @@ if __name__ == "__main__":
                         if k>=N_batchs: break
                         imgs = imgs.cuda()
                         lbls = lbls.cuda()
-                        output = model(imgs) 
+                        output = model(imgs)
                         loss = torch.nn.functional.cross_entropy(output, lbls)
                         model.zero_grad() # clear gradients
                         loss.backward()
-                        imp.accumulate_grad(model) # accumulate Jacobian  
+                        imp.accumulate_grad(model) # accumulate Jacobian
                         if (k+1)%50==0 or k==N_batchs-1:
                             imp.accumulate_score(model)
                             torch.cuda.empty_cache()  # in case CUDA OUT OF MEMORY
@@ -549,11 +541,11 @@ if __name__ == "__main__":
             del pruner
             del model
             model = None
-            
+
             # Force garbage collection and clear CUDA cache
             gc.collect()
             torch.cuda.empty_cache()
-            
+
             # Save results after each repeat
             print(f'Saving results after repeat {repeat}...')
             torch.save({'iterative_steps': iterative_steps, 'pruning_ratio':pruning_ratio, 'N_batchs':N_batchs, 'batch_size':batch_size, \
@@ -561,11 +553,11 @@ if __name__ == "__main__":
                         'train_acc_record':train_acc_record, 'val_acc_record':val_acc_record, 'val_loss_record':val_loss_record,\
                         'time_record':time_record},\
                         f'{save_dir}/results.pth')
-        
+
         time_record[imp_name] = [(time.time() - overall_start_time)/repeats/iterative_steps, evaluating_time/repeats/iterative_steps]
         logger.info(f'{imp_name} average overall time (including evaluation): {time_record[imp_name][0]}; average evaluating time: {time_record[imp_name][1]}')
-        
-        
+
+
 
         ######################### save #########################
         print('Saving results...')
@@ -573,9 +565,9 @@ if __name__ == "__main__":
                     'params_record':params_record, 'macs_record':macs_record, 'train_loss_record':train_loss_record,\
                     'train_acc_record':train_acc_record, 'val_acc_record':val_acc_record, 'val_loss_record':val_loss_record,\
                     'time_record':time_record},\
-                    f'{save_dir}/results.pth') # a_record_{network}_{middle_name}
+                    f'{save_dir}/results.pth')
 
-       
+
     ######################### draw #########################
 
 
@@ -587,8 +579,8 @@ if __name__ == "__main__":
     legend_fontsize  = 15
     bar_legend_fontsize = 18
 
-    
-    results_path = f'./results/benchmark_importance/{args.save_dir}_Global'
+
+    results_path = f'./results/pruning_results/{args.save_dir}_Global'
     dataset_ = 'cifar' if 'cifar' in dataset else 'imagenet'
     plot_results(
         results_path=results_path,

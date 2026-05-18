@@ -2,9 +2,9 @@
 Script to load and plot benchmark results from benchmark_cifar.py
 
 Usage:
-    python plot_benchmark_results.py --save_dir ./plots
+    python plot_pruning_results.py --save_dir ./plots
 
-    python plot_benchmark_results.py --save_dir imgnet_final --dataset imagenet
+    python plot_pruning_results.py --save_dir imgnet_final --dataset imagenet
     
 """
 import argparse
@@ -24,21 +24,21 @@ BAR_LEGEND_FONTSIZE = 'small'
 
 # Color mapping for different importance criteria
 colors = {
-    'WHC': 'C0',         # Blue
+    'WHC': 'C6',         # Pink
     'L1': 'C1',          # Orange
     'FPGM': 'C2',        # Green
     'BN Scale': 'C7',    # Gray
     'Random': 'C4',      # Purple
     
     'Taylor': 'C5',      # Brown
-    'Hessian': 'C6',     # Pink
-    'JBR_ind': 'C9',     # Olive
+    # 'Hessian': 'C6',     # Pink
+    # 'JBR_ind': 'C9',     # Olive
     'JBR': 'C10',        # Cyan
-    'JBR_diag_ind': 'C12',  # Lime
-    'JBR_diag': 'C13',      # Teal
+    # 'JBR_diag_ind': 'C12',  # Lime
+    # 'JBR_diag': 'C13',      # Teal
     'Jacobian': 'C3',    # Red
-    'Jacobian Random Labels': 'C14',    # Violet
-    'Jacobian Isolated': 'black',    # black
+    # 'Jacobian Random Labels': 'C14',    # Violet
+    # 'Jacobian Isolated': 'black',    # black
 }
 
 
